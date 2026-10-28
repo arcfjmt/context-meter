@@ -1,1 +1,7 @@
-{ "name": "context-meter", "version": "0.1.0", "description": "Shows the context window fill as a bar above the prompt", "types": "./types/index.d.ts" }
+{
+  "name": "context-meter",
+  "version": "0.1.0",
+  "description": "Shows the context window fill as a bar above the prompt",
+  "types": "./types/index.d.ts",
+  "license": "MIT"
+}
