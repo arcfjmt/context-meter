@@ -1,5 +1,14 @@
 {
   "name": "context-meter",
-  "owner": { "name": "arcfjmt" },
-  "plugins": [{ "name": "context-meter", "source": "./", "description": "Shows the context window fill as a bar above the prompt" }]
+  "description": "context-meter: a Claude Code mod that shows the context window fill above the prompt",
+  "owner": {
+    "name": "arcfjmt"
+  },
+  "plugins": [
+    {
+      "name": "context-meter",
+      "source": "./",
+      "description": "Shows the context window fill as a bar above the prompt"
+    }
+  ]
 }

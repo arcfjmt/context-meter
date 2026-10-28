@@ -3,5 +3,9 @@
   "version": "0.1.0",
   "description": "Shows the context window fill as a bar above the prompt",
   "types": "./types/index.d.ts",
-  "license": "MIT"
+  "license": "MIT",
+  "author": {
+    "name": "arcfjmt",
+    "url": "https://github.com/arcfjmt"
+  }
 }
