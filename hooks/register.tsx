@@ -23,7 +23,34 @@ const toLimits = (rateLimits: SessionRateLimit[]): Limit[] =>
   rateLimits.map(limit => ({
     label: LIMIT_LABELS[limit.kind] ?? limit.kind,
     percent: Math.round(limit.percentUsed),
+    ...(limit.resetsAt === undefined ? {} : { resetsAt: limit.resetsAt }),
   }))
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/**
+ * The reset time in the local time zone, 24-hour: `15:00` when it falls on the
+ * same day as `now`, else `Thu 09:00`. Empty when the time is missing or unreadable.
+ */
+const formatReset = (resetsAt: string | undefined, now: number): string => {
+  if (resetsAt === undefined) {
+    return ''
+  }
+  const at = new Date(resetsAt)
+  if (Number.isNaN(at.getTime())) {
+    return ''
+  }
+  const today = new Date(now)
+  const sameDay =
+    at.getFullYear() === today.getFullYear() &&
+    at.getMonth() === today.getMonth() &&
+    at.getDate() === today.getDate()
+  const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`
+
+  return sameDay ? time : `${WEEKDAYS[at.getDay()]} ${time}`
+}
 
 const formatTokens = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}k`
@@ -63,6 +90,7 @@ export const register: Register = on => {
       return next(e)
     }
 
+    const now = await $.clock.now()
     const { Box, Text } = $.ui.resolve(e)
     const filled =
       current === null ? 0 : Math.min(BAR_WIDTH, Math.round((current.percent / 100) * BAR_WIDTH))
@@ -79,15 +107,27 @@ export const register: Register = on => {
             ({formatTokens(current.tokens)} / {formatTokens(current.window)})
           </Text>,
         ]}
-        {windows.flatMap((limit, index) => [
-          <Text key={`${limit.label}-label`} dimColor>
-            {current === null && index === 0 ? '' : '  '}
-            {limit.label}{' '}
-          </Text>,
-          <Text key={`${limit.label}-percent`} color={colorFor(limit.percent)}>
-            {limit.percent}%
-          </Text>,
-        ])}
+        {windows.flatMap((limit, index) => {
+          const reset = formatReset(limit.resetsAt, now)
+
+          return [
+            <Text key={`${limit.label}-label`} dimColor>
+              {current === null && index === 0 ? '' : '  '}
+              {limit.label}{' '}
+            </Text>,
+            <Text key={`${limit.label}-percent`} color={colorFor(limit.percent)}>
+              {limit.percent}%
+            </Text>,
+            ...(reset === ''
+              ? []
+              : [
+                  <Text key={`${limit.label}-reset`} dimColor>
+                    {' '}
+                    ({reset})
+                  </Text>,
+                ]),
+          ]
+        })}
       </Box>
     )
   })

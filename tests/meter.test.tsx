@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 const BAND = {
   plugin: 'context-meter',
@@ -13,7 +13,12 @@ const BAND = {
   },
 } as const
 
+// Built in the local time zone, as the band reads them, so the expectations hold in any zone.
+const NOON = new Date(2026, 10, 2, 12, 0).getTime() // Mon 2 Nov 2026
+const at = (day: number, hour: number) => new Date(2026, 10, day, hour, 0).toISOString()
+
 test('the band shows the context fill, on every surface', async ($, on) => {
+  mock.clock(on, { now: NOON })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.usage', () => ({
     value: {
@@ -34,6 +39,7 @@ test('the band shows the context fill, on every surface', async ($, on) => {
 })
 
 test('before the first response the band leaves the row to the engine', async ($, on) => {
+  mock.clock(on, { now: NOON })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [] } }))
   on('ui.render', ($, e) => {
@@ -49,6 +55,7 @@ test('before the first response the band leaves the row to the engine', async ($
 })
 
 test('the band shows the plan limits beside the context fill', async ($, on) => {
+  mock.clock(on, { now: NOON })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.usage', () => ({
     value: {
@@ -71,6 +78,7 @@ test('the band shows the plan limits beside the context fill', async ($, on) => 
 })
 
 test('off a subscription the band shows the context fill alone', async ($, on) => {
+  mock.clock(on, { now: NOON })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.usage', () => ({
     value: { startedAt: 0, context: { tokens: 84_000, window: 200_000, percent: 42 }, rateLimits: [] },
@@ -79,5 +87,44 @@ test('off a subscription the band shows the context fill alone', async ($, on) =
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /5h|7d/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('each limit shows when it resets: the time today, the weekday and time later', async ($, on) => {
+  mock.clock(on, { now: NOON })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({
+    value: {
+      startedAt: 0,
+      context: { tokens: 84_000, window: 200_000, percent: 42 },
+      rateLimits: [
+        { kind: 'five_hour', percentUsed: 23, resetsAt: at(2, 15) },
+        { kind: 'seven_day', percentUsed: 41, resetsAt: at(5, 9) },
+      ],
+    },
+  }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /15:00/ }))?.text).toBe(' (15:00)')
+  expect((await ui.find({ type: 'Text', text: /09:00/ }))?.text).toBe(' (Thu 09:00)')
+  await ui.unmount()
+})
+
+test('a limit without a reset time shows its percentage alone', async ($, on) => {
+  mock.clock(on, { now: NOON })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({
+    value: {
+      startedAt: 0,
+      context: { tokens: 84_000, window: 200_000, percent: 42 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 23 }],
+    },
+  }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^23%$/ }))?.text).toBe('23%')
+  expect(await ui.find({ type: 'Text', text: /\(\d+:\d+\)/ })).toBeUndefined()
   await ui.unmount()
 })
