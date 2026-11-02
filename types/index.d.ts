@@ -8,6 +8,6 @@ export type Limit = { label: string; percent: number; resetsAt?: string }
 
 declare module 'claude-code' {
   interface PluginState {
-    'context-meter': { fill: Fill | null; limits: Limit[] }
+    'context-meter': { fill: Fill | null; limits: Limit[]; version: string | null }
   }
 }

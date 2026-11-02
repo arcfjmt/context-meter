@@ -128,3 +128,38 @@ test('a limit without a reset time shows its percentage alone', async ($, on) =>
   expect(await ui.find({ type: 'Text', text: /\(\d+:\d+\)/ })).toBeUndefined()
   await ui.unmount()
 })
+
+test("the band ends with the mod's version, read from its plugin.json", async ($, on) => {
+  mock.clock(on, { now: NOON })
+  on('fs.read', (_, e) =>
+    e.path.endsWith('/.claude-plugin/plugin.json')
+      ? { value: JSON.stringify({ name: 'context-meter', version: '9.8.7' }) }
+      : { value: '' },
+  )
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({
+    value: { startedAt: 0, context: { tokens: 84_000, window: 200_000, percent: 42 }, rateLimits: [] },
+  }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /v9/ }))?.text).toBe('  v9.8.7')
+  await ui.unmount()
+})
+
+test('a manifest it cannot read leaves the version out', async ($, on) => {
+  mock.clock(on, { now: NOON })
+  on('fs.read', () => {
+    throw new Error('ENOENT')
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({
+    value: { startedAt: 0, context: { tokens: 84_000, window: 200_000, percent: 42 }, rateLimits: [] },
+  }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /%/ }))?.text).toBe(' 42%')
+  expect(await ui.find({ type: 'Text', text: /^\s*v\d/ })).toBeUndefined()
+  await ui.unmount()
+})

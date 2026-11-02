@@ -5,6 +5,7 @@ import type { Fill, Limit } from '../types'
 
 const fill = atom({ plugin: 'context-meter', key: 'fill' } as const, null)
 const limits = atom({ plugin: 'context-meter', key: 'limits' } as const, [])
+const version = atom({ plugin: 'context-meter', key: 'version' } as const, null)
 
 const BAR_WIDTH = 20
 
@@ -52,6 +53,17 @@ const formatReset = (resetsAt: string | undefined, now: number): string => {
   return sameDay ? time : `${WEEKDAYS[at.getDay()]} ${time}`
 }
 
+/** The `version` a plugin.json's text states, or null when it states none. */
+const versionOf = (manifest: string): string | null => {
+  try {
+    const value = (JSON.parse(manifest) as { version?: unknown }).version
+
+    return typeof value === 'string' ? value : null
+  } catch {
+    return null
+  }
+}
+
 const formatTokens = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}k`
 
@@ -67,6 +79,11 @@ export const register: Register = on => {
     const { context, rateLimits } = await $.session.usage()
     await update($, fill, () => toFill(context))
     await update($, limits, () => toLimits(rateLimits))
+    // Read from the manifest, never written here, so the version shown follows each release.
+    const manifestVersion = await $.fs
+      .read(`${$.plugin.root}/.claude-plugin/plugin.json`)
+      .then(versionOf, () => null)
+    await update($, version, () => manifestVersion)
 
     return result
   })
@@ -85,6 +102,7 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const current = await read($, fill)
     const windows = await read($, limits)
+    const shownVersion = await read($, version)
 
     if (e.props.hasSurvey || (current === null && windows.length === 0)) {
       return next(e)
@@ -128,6 +146,11 @@ export const register: Register = on => {
                 ]),
           ]
         })}
+        {shownVersion !== null && (
+          <Text key="version" dimColor>
+            {'  '}v{shownVersion}
+          </Text>
+        )}
       </Box>
     )
   })
